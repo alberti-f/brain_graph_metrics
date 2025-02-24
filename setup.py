@@ -30,7 +30,7 @@ setuptools.setup(
     ],
     entry_points={
         "console_scripts": [
-            "brain-graph-metrics=brain_graph_metrics.__main__:main",
+            "brain-graph-metrics=brain_graph_metrics:main",
         ],
     },
 )
