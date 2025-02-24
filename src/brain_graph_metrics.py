@@ -76,12 +76,13 @@ def assign_communities(G):
             comm_dict[node] = i
     return comm_dict, communities
 
-def compute_participation_coefficient(G, comm_dict):
+def compute_participation_coefficient(G, communities):
     """
     Compute the participation coefficient for each node.
     Participation coefficient quantifies how evenly a node's connections
     are distributed across communities.
     """
+    communities = dict(zip(G.nodes(), communities))
     participation = {}
     for node in G.nodes():
         total_strength = G.degree(node, weight='weight')
@@ -92,13 +93,13 @@ def compute_participation_coefficient(G, comm_dict):
         comm_weights = {}
         for neighbor in G.neighbors(node):
             weight = G[node][neighbor].get('weight', 1.0)
-            comm = comm_dict[neighbor]
+            comm = communities[neighbor]
             comm_weights[comm] = comm_weights.get(comm, 0.0) + weight
         sum_sq = sum((w / total_strength)**2 for w in comm_weights.values())
         participation[node] = 1.0 - sum_sq
     return participation
 
-def compute_node_metrics(G):
+def compute_node_metrics(G, communities=None):
     # Compute degree (binary) and strength (weighted degree)
     degree_dict = dict(G.degree())
     strength_dict = dict(G.degree(weight='weight'))
@@ -116,8 +117,13 @@ def compute_node_metrics(G):
     local_eff = local_efficiency_node(G)
 
     # Compute communities and participation coefficient.
-    comm_dict, _ = assign_communities(G)
-    participation = compute_participation_coefficient(G, comm_dict)
+    
+    if communities is None:
+        communities, communities_list = assign_communities(G)
+    else:
+        communities_list = [communities[node] for node in G]
+
+    participation = compute_participation_coefficient(G, communities)
 
     # Combine all node metrics into a DataFrame.
     data = {
@@ -127,7 +133,7 @@ def compute_node_metrics(G):
         "Betweenness": betweenness_dict,
         "Global_Efficiency": global_eff,
         "Local_Efficiency": local_eff,
-        "Community": comm_dict,
+        "Community": communities,
         "Participation": participation,
     }
     node_metrics = pd.DataFrame(data)
@@ -138,6 +144,7 @@ def compute_node_metrics(G):
 def compute_global_metrics(G, communities):
     # Global efficiency
     global_eff = nx.global_efficiency(G)
+    local_eff = nx.local_efficiency(G)
     
     # Average clustering coefficient
     avg_clustering = nx.average_clustering(G, weight='weight')
@@ -159,9 +166,13 @@ def compute_global_metrics(G, communities):
     # Average degree and strength
     avg_degree = np.mean([d for _, d in dict(G.degree()).items()])
     avg_strength = np.mean([s for _, s in dict(G.degree(weight='weight')).items()])
-    
+
+    seed = 42
+    # small_world_index = nx.algorithms.smallworld.sigma(G, niter=100, nrand=10, seed=seed)
+
     metrics = {
         "Global_Efficiency": global_eff,
+        "Local_Efficiency": local_eff,
         "Average_Clustering": avg_clustering,
         "Average_Shortest_Path_Length": avg_shortest_path,
         "Density": density,
@@ -170,6 +181,7 @@ def compute_global_metrics(G, communities):
         "Average_Strength": avg_strength,
         "Number_of_Nodes": G.number_of_nodes(),
         "Number_of_Edges": G.number_of_edges(),
+        # "Small_World_Index": small_world_index
     }
     return pd.DataFrame([metrics])
 
@@ -177,17 +189,18 @@ def main():
     args = parse_args()
     
     # Load the connectivity matrix.
-    matrix, labels = load_connectivity_matrix(args.connectivity, threshold=args.threshold, binary=args.binary)
+    matrix = load_connectivity_matrix(args.connectivity, threshold=args.threshold, binary=args.binary)
     
     # Create a weighted undirected graph from the connectivity matrix.
     # Assumes the matrix is symmetric.
     G = nx.from_numpy_array(matrix)
-    
-    # Compute node-level metrics.
-    node_metrics = compute_node_metrics(G)
-    
+        
     # Compute communities again for global modularity (we already computed them in compute_node_metrics).
-    _, communities = assign_communities(G)
+    communities_dict, communities = assign_communities(G)
+
+    # Compute node-level metrics.
+    node_metrics = compute_node_metrics(G, communities_dict)
+
     
     # Compute global network metrics.
     global_metrics = compute_global_metrics(G, communities)
@@ -200,4 +213,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
