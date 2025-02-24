@@ -10,7 +10,7 @@ setuptools.setup(
     version="0.1",
     author="Francesco Alberti",
     author_email="fnc.alberti@gmail.com",
-    description="A Python package for computing graph theoretical metrics on brain connectivity networks.",
+    description="This package provides a CLI-callable wrapper of NetworkX to compute graph theoretical metrics on brain connectivity networks.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/alberti-f/brain_graph_metrics",
