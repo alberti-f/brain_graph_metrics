@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import csv
 import argparse
 import numpy as np
 import pandas as pd
@@ -20,10 +21,16 @@ def parse_args():
     return parser.parse_args()
 
 def load_connectivity_matrix(filename, threshold=0.0, binary=False):
-    # Read the CSV file into a pandas DataFrame and then convert to a numpy array.
-    df = pd.read_csv(filename, index_col=0)
+    # Determine the delimiter of the CSV file.
+    with open(filename, 'r', encoding='utf-8') as f:
+        sample = f.read(1024)
+        f.seek(0)
+        sniffer = csv.Sniffer()
+        delimiter = sniffer.sniff(sample).delimiter
+
+    df = pd.read_csv(filename, index_col=None, header=None, delimiter=delimiter)
     matrix = df.values.astype(float)
-    
+
     # Apply thresholding if specified.
     if threshold > 0.0:
         matrix[matrix < threshold] = 0.0
@@ -31,8 +38,8 @@ def load_connectivity_matrix(filename, threshold=0.0, binary=False):
     # Convert matrix to binary if the binary flag is set.
     if binary:
         matrix = (matrix > 0).astype(float)
-        
-    return matrix, df.index.tolist()
+
+    return matrix
 
 def compute_nodal_efficiency(G):
     # Efficiency of node i: average of inverse shortest path lengths to all other nodes.
