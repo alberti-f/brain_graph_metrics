@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain_graph_metrics"
+version = "0.1"
+description = "A Python package for computing graph theoretical metrics on brain connectivity networks."
+readme = "README.md"
+license = { text = "MIT License" }
+authors = [
+  { name = "Francesco Alberti", email = "fnc.alberti@gmail.com" }
+]
+keywords = ["graph analysis", "brain networks"]
+urls = { "Homepage" = "https://github.com/alberti-f/brain_graph_metrics" }
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "networkx"
+]
+
+[project.scripts]
+brain-graph-metrics = "brain_graph_metrics.__main__:main"
