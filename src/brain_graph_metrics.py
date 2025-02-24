@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Compute graph theoretical metrics from a tractography-based structural connectivity CSV file."
@@ -41,31 +42,29 @@ def load_connectivity_matrix(filename, threshold=0.0, binary=False):
 
     return matrix
 
-def compute_nodal_efficiency(G):
-    # Efficiency of node i: average of inverse shortest path lengths to all other nodes.
-    n = G.number_of_nodes()
-    efficiency = {}
-    for node in G.nodes():
-        lengths = nx.single_source_dijkstra_path_length(G, node, weight='weight')
-        # Sum 1/d for all reachable nodes (skip self: distance==0)
-        eff_sum = 0.0
-        for target, d in lengths.items():
-            if node != target and d > 0:
-                eff_sum += 1.0/d
-        efficiency[node] = eff_sum / (n - 1) if n > 1 else 0.0
-    return efficiency
 
-def compute_local_efficiency_per_node(G):
+def global_efficiency_node(G):
+    # Global efficiency of node i: average of inverse shortest path lengths to all other nodes.
+    n = len(G)
+    denom = n - 1
+    global_eff = dict(zip(G.nodes(), np.zeros(n)))
+
+    lengths = nx.all_pairs_shortest_path_length(G)
+    for source, targets in lengths:
+        for _, distance in targets.items():
+            if distance > 0:
+                global_eff[source] += 1 / distance
+        global_eff[source] /= denom
+
+    return global_eff
+
+
+def local_efficiency_node(G):
     # Local efficiency of node i: global efficiency of the subgraph induced by i's neighbors.
-    local_eff = {}
-    for node in G.nodes():
-        neighbors = list(G.neighbors(node))
-        if len(neighbors) < 2:
-            local_eff[node] = 0.0
-        else:
-            subgraph = G.subgraph(neighbors)
-            local_eff[node] = nx.global_efficiency(subgraph)
+    local_eff = (nx.global_efficiency(G.subgraph(G[v])) for v in G)
+    local_eff = dict(zip(G.nodes, local_eff))
     return local_eff
+
 
 def assign_communities(G):
     # Use greedy modularity communities detection to assign community labels.
@@ -103,38 +102,30 @@ def compute_node_metrics(G):
     # Compute degree (binary) and strength (weighted degree)
     degree_dict = dict(G.degree())
     strength_dict = dict(G.degree(weight='weight'))
-    
+
     # Compute clustering coefficient (weighted)
     clustering_dict = nx.clustering(G, weight='weight')
-    
+
     # Compute betweenness centrality (weighted)
     betweenness_dict = nx.betweenness_centrality(G, weight='weight', normalized=True)
-    
-    # Compute eigenvector centrality using the numpy-based algorithm.
-    try:
-        eigenvector_dict = nx.eigenvector_centrality_numpy(G, weight='weight')
-    except Exception as e:
-        print("Eigenvector centrality did not converge:", e)
-        eigenvector_dict = {node: None for node in G.nodes()}
-    
+
     # Compute nodal efficiency (average inverse shortest path lengths)
-    nodal_eff = compute_nodal_efficiency(G)
-    
+    global_eff = global_efficiency_node(G)
+
     # Compute local efficiency for each node
-    local_eff = compute_local_efficiency_per_node(G)
-    
+    local_eff = local_efficiency_node(G)
+
     # Compute communities and participation coefficient.
     comm_dict, _ = assign_communities(G)
     participation = compute_participation_coefficient(G, comm_dict)
-    
+
     # Combine all node metrics into a DataFrame.
     data = {
         "Degree": degree_dict,
         "Strength": strength_dict,
         "Clustering": clustering_dict,
         "Betweenness": betweenness_dict,
-        "Eigenvector": eigenvector_dict,
-        "Nodal_Efficiency": nodal_eff,
+        "Global_Efficiency": global_eff,
         "Local_Efficiency": local_eff,
         "Community": comm_dict,
         "Participation": participation,
@@ -142,6 +133,7 @@ def compute_node_metrics(G):
     node_metrics = pd.DataFrame(data)
     node_metrics.index.name = "Node"
     return node_metrics
+
 
 def compute_global_metrics(G, communities):
     # Global efficiency
