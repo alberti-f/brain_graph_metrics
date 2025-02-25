@@ -7,10 +7,17 @@ import networkx as nx
 
 
 def parse_args():
+    """
+    Parse command-line arguments for computing graph theoretical metrics 
+    from a tractography-based structural connectivity CSV file.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Compute graph theoretical metrics from a tractography-based structural connectivity CSV file."
     )
-    parser.add_argument("connectivity", help="Path to the CSV file containing the connectivity matrix.")
+    parser.add_argument("connectivity", help="Path to the CSV file containing the connectivity matrix. The file must have no header nor row names.")
     parser.add_argument("--threshold", type=float, default=0.0,
                         help="Threshold below which connection weights are set to zero (default: 0.0, i.e. no thresholding).")
     parser.add_argument("--binary", action="store_true",
@@ -19,9 +26,25 @@ def parse_args():
                         help="Output CSV file for node-wise metrics (default: node_metrics.csv).")
     parser.add_argument("--global_out", type=str, default="global_metrics.csv",
                         help="Output CSV file for global network metrics (default: global_metrics.csv).")
+    parser.add_argument("--no_com", action="store_true",
+                        help="Do not compute node communicability.")
+    parser.add_argument("--no_swi", action="store_true",
+                        help="Do not compute small-world index.")
     return parser.parse_args()
 
-def load_connectivity_matrix(filename, threshold=0.0, binary=False):
+def load_connectivity_matrix(filename, threshold=0, binary=False):
+    """
+    Load a structural connectivity matrix from a CSV file, applying an optional threshold 
+    and converting the matrix to binary if specified.
+
+    Parameters:
+        filename (str): Path to the CSV file containing the connectivity matrix.
+        threshold (float): Percentile threshold below which values are set to zero.
+        binary (bool): If True, converts the matrix to a binary (unweighted) representation.
+
+    Returns:
+        np.ndarray: Processed connectivity matrix as a NumPy array.
+    """
     # Determine the delimiter of the CSV file.
     with open(filename, 'r', encoding='utf-8') as f:
         sample = f.read(1024)
@@ -34,6 +57,7 @@ def load_connectivity_matrix(filename, threshold=0.0, binary=False):
 
     # Apply thresholding if specified.
     if threshold > 0.0:
+        threshold = np.percentile(matrix, threshold)
         matrix[matrix < threshold] = 0.0
 
     # Convert matrix to binary if the binary flag is set.
@@ -44,6 +68,16 @@ def load_connectivity_matrix(filename, threshold=0.0, binary=False):
 
 
 def global_efficiency_node(G):
+    """
+    Compute the global efficiency for each node in a graph. 
+    Efficiency is calculated as the inverse of the shortest path length to all other nodes.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+
+    Returns:
+        dict: A dictionary mapping each node to its global efficiency.
+    """
     # Global efficiency of node i: average of inverse shortest path lengths to all other nodes.
     n = len(G)
     denom = n - 1
@@ -60,6 +94,16 @@ def global_efficiency_node(G):
 
 
 def local_efficiency_node(G):
+    """
+    Compute the local efficiency for each node in a graph. 
+    Local efficiency is defined as the global efficiency of the subgraph induced by a node's neighbors.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+
+    Returns:
+        dict: A dictionary mapping each node to its local efficiency.
+    """
     # Local efficiency of node i: global efficiency of the subgraph induced by i's neighbors.
     local_eff = (nx.global_efficiency(G.subgraph(G[v])) for v in G)
     local_eff = dict(zip(G.nodes, local_eff))
@@ -67,6 +111,16 @@ def local_efficiency_node(G):
 
 
 def assign_communities(G):
+    """
+    Detect communities in the graph using the greedy modularity optimization algorithm.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+
+    Returns:
+        tuple: A dictionary mapping each node to its community index, 
+               and a list of sets representing the detected communities.
+    """
     # Use greedy modularity communities detection to assign community labels.
     communities = list(nx.algorithms.community.greedy_modularity_communities(G, weight='weight'))
     # Create a dictionary mapping node -> community index.
@@ -76,12 +130,20 @@ def assign_communities(G):
             comm_dict[node] = i
     return comm_dict, communities
 
+
 def compute_participation_coefficient(G, communities):
     """
-    Compute the participation coefficient for each node.
-    Participation coefficient quantifies how evenly a node's connections
-    are distributed across communities.
+    Compute the participation coefficient for each node in the network.
+    This measures how evenly a node's connections are distributed across communities.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+        communities (dict): A dictionary mapping each node to its community index.
+
+    Returns:
+        dict: A dictionary mapping each node to its participation coefficient.
     """
+
     communities = dict(zip(G.nodes(), communities))
     participation = {}
     for node in G.nodes():
@@ -99,7 +161,21 @@ def compute_participation_coefficient(G, communities):
         participation[node] = 1.0 - sum_sq
     return participation
 
-def compute_node_metrics(G, communities=None):
+
+def compute_node_metrics(G, communities=None, no_com=False):
+    """
+    Compute node-wise graph theoretical metrics including degree, strength, clustering, 
+    betweenness centrality, communicability, efficiency, community assignment, and participation coefficient.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+        communities (dict, optional): Precomputed community assignments. If None, communities are detected.
+        no_com (bool): If True do not compute communicability.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing computed node-wise metrics.
+    """
+
     # Compute degree (binary) and strength (weighted degree)
     degree_dict = dict(G.degree())
     strength_dict = dict(G.degree(weight='weight'))
@@ -110,6 +186,13 @@ def compute_node_metrics(G, communities=None):
     # Compute betweenness centrality (weighted)
     betweenness_dict = nx.betweenness_centrality(G, weight='weight', normalized=True)
 
+    # Compute communicability
+    if no_com:
+        communicability = dict(zip(G.nodes(), np.full(len(G), np.nan)))
+    else:
+        communicability_dict = nx.communicability(G)
+        communicability = {node: sum(comm.values()) for node, comm in communicability_dict.items()}    
+
     # Compute nodal efficiency (average inverse shortest path lengths)
     global_eff = global_efficiency_node(G)
 
@@ -117,11 +200,9 @@ def compute_node_metrics(G, communities=None):
     local_eff = local_efficiency_node(G)
 
     # Compute communities and participation coefficient.
-    
+
     if communities is None:
-        communities, communities_list = assign_communities(G)
-    else:
-        communities_list = [communities[node] for node in G]
+        communities, _ = assign_communities(G)
 
     participation = compute_participation_coefficient(G, communities)
 
@@ -131,6 +212,7 @@ def compute_node_metrics(G, communities=None):
         "Strength": strength_dict,
         "Clustering": clustering_dict,
         "Betweenness": betweenness_dict,
+        "Communicability": communicability,
         "Global_Efficiency": global_eff,
         "Local_Efficiency": local_eff,
         "Community": communities,
@@ -141,14 +223,26 @@ def compute_node_metrics(G, communities=None):
     return node_metrics
 
 
-def compute_global_metrics(G, communities):
+def compute_global_metrics(G, communities, no_swi=False):
+    """
+    Compute global graph metrics such as global efficiency, local efficiency, clustering coefficient, 
+    average shortest path length, density, modularity, and degree statistics.
+
+    Parameters:
+        G (networkx.Graph): The input graph.
+        communities (list): A list of sets representing the detected communities.
+        no_swi (bool): If True do not compute small world index.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing computed global network metrics.
+    """
     # Global efficiency
     global_eff = nx.global_efficiency(G)
     local_eff = nx.local_efficiency(G)
-    
+
     # Average clustering coefficient
     avg_clustering = nx.average_clustering(G, weight='weight')
-    
+
     # Average shortest path length: compute on the largest connected component if necessary.
     if nx.is_connected(G):
         avg_shortest_path = nx.average_shortest_path_length(G, weight='weight')
@@ -156,19 +250,19 @@ def compute_global_metrics(G, communities):
         largest_cc = max(nx.connected_components(G), key=len)
         subG = G.subgraph(largest_cc)
         avg_shortest_path = nx.average_shortest_path_length(subG, weight='weight')
-    
+
     # Network density
     density = nx.density(G)
-    
+
     # Modularity of the partition obtained by greedy modularity communities algorithm.
     modularity = nx.algorithms.community.quality.modularity(G, communities, weight='weight')
-    
+
     # Average degree and strength
     avg_degree = np.mean([d for _, d in dict(G.degree()).items()])
     avg_strength = np.mean([s for _, s in dict(G.degree(weight='weight')).items()])
 
     seed = 42
-    # small_world_index = nx.algorithms.smallworld.sigma(G, niter=100, nrand=10, seed=seed)
+    small_world_index = np.nan if no_swi else nx.algorithms.smallworld.sigma(G, niter=100, nrand=10, seed=seed)
 
     metrics = {
         "Global_Efficiency": global_eff,
@@ -181,30 +275,35 @@ def compute_global_metrics(G, communities):
         "Average_Strength": avg_strength,
         "Number_of_Nodes": G.number_of_nodes(),
         "Number_of_Edges": G.number_of_edges(),
-        # "Small_World_Index": small_world_index
+        "Small_World_Index": small_world_index
     }
     return pd.DataFrame([metrics])
 
+
 def main():
+    """
+    Main function that parses command-line arguments, loads the connectivity matrix, 
+    constructs the graph, computes node-level and global metrics, and saves results to CSV files.
+    """
     args = parse_args()
-    
+
     # Load the connectivity matrix.
     matrix = load_connectivity_matrix(args.connectivity, threshold=args.threshold, binary=args.binary)
-    
+
     # Create a weighted undirected graph from the connectivity matrix.
     # Assumes the matrix is symmetric.
     G = nx.from_numpy_array(matrix)
-        
+
     # Compute communities again for global modularity (we already computed them in compute_node_metrics).
     communities_dict, communities = assign_communities(G)
 
     # Compute node-level metrics.
-    node_metrics = compute_node_metrics(G, communities_dict)
+    node_metrics = compute_node_metrics(G, communities_dict, no_com=args.no_com)
 
-    
+
     # Compute global network metrics.
-    global_metrics = compute_global_metrics(G, communities)
-    
+    global_metrics = compute_global_metrics(G, communities, no_swi=args.no_swi)
+
     # Save outputs to CSV files.
     node_metrics.to_csv(args.node_out)
     global_metrics.to_csv(args.global_out, index=False)
