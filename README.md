@@ -12,7 +12,7 @@ The package streamlines the analysis of brain connectivity data by:
 ## Usage
 The main nodal and global graph metrics of a graph can be computed from terminal as:
 ```bash
-python brain-graph-metrics <matrix.csv> --threshold 95 --binary --node_out <output_node_metrics.csv> --global_out <output_global_metrics.csv>
+brain-graph-metrics <matrix.csv> --threshold 95 --binary --node_out <output_node_metrics.csv> --global_out <output_global_metrics.csv>
 ```
 
 - **<matrix.csv>**: Input CSV file containing the connectivity matrix.\
