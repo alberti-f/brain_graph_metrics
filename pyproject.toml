@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain_graph_metrics"
+version = "0.1"
+description = "This package provides a CLI-callable wrapper of NetworkX to compute graph theoretical metrics on brain connectivity networks."
+readme = "README.md"
+authors = [
+    { name = "Francesco Alberti", email = "fnc.alberti@gmail.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "networkx"
+]
+
+[project.urls]
+Homepage = "https://github.com/alberti-f/brain_graph_metrics"
+
+[project.scripts]
+brain-graph-metrics = "brain_graph_metrics:main"
