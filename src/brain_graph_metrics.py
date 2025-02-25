@@ -10,7 +10,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Compute graph theoretical metrics from a tractography-based structural connectivity CSV file."
     )
-    parser.add_argument("connectivity", help="Path to the CSV file containing the connectivity matrix.")
+    parser.add_argument("connectivity", help="Path to the CSV file containing the connectivity matrix. The file must have no header nor row names.")
     parser.add_argument("--threshold", type=float, default=0.0,
                         help="Threshold below which connection weights are set to zero (default: 0.0, i.e. no thresholding).")
     parser.add_argument("--binary", action="store_true",
@@ -102,7 +102,7 @@ def compute_participation_coefficient(G, communities):
     return participation
 
 
-def compute_node_metrics(G, communities=None):
+def compute_node_metrics(G, communities=None, no_com=False, no_swi=False):
     # Compute degree (binary) and strength (weighted degree)
     degree_dict = dict(G.degree())
     strength_dict = dict(G.degree(weight='weight'))
@@ -113,6 +113,9 @@ def compute_node_metrics(G, communities=None):
     # Compute betweenness centrality (weighted)
     betweenness_dict = nx.betweenness_centrality(G, weight='weight', normalized=True)
 
+    # Compute communicability
+    communicability = nx.communicability(G)
+
     # Compute nodal efficiency (average inverse shortest path lengths)
     global_eff = global_efficiency_node(G)
 
@@ -122,7 +125,7 @@ def compute_node_metrics(G, communities=None):
     # Compute communities and participation coefficient.
 
     if communities is None:
-        communities, communities_list = assign_communities(G)
+        communities, _ = assign_communities(G)
     else:
         communities_list = [communities[node] for node in G]
 
@@ -134,6 +137,7 @@ def compute_node_metrics(G, communities=None):
         "Strength": strength_dict,
         "Clustering": clustering_dict,
         "Betweenness": betweenness_dict,
+        "Communicability": communicability,
         "Global_Efficiency": global_eff,
         "Local_Efficiency": local_eff,
         "Community": communities,
