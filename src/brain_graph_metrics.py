@@ -191,7 +191,7 @@ def compute_node_metrics(G, communities=None, no_com=False):
         communicability = dict(zip(G.nodes(), np.full(len(G), np.nan)))
     else:
         communicability_dict = nx.communicability(G)
-        communicability = {node: sum(comm.values()) for node, comm in communicability_dict.items()}    
+        communicability = {node: np.nanmean(comm.values()) for node, comm in communicability_dict.items()}
 
     # Compute nodal efficiency (average inverse shortest path lengths)
     global_eff = global_efficiency_node(G)
