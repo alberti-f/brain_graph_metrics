@@ -21,7 +21,7 @@ def parse_args():
                         help="Output CSV file for global network metrics (default: global_metrics.csv).")
     return parser.parse_args()
 
-def load_connectivity_matrix(filename, threshold=0.0, binary=False):
+def load_connectivity_matrix(filename, threshold=0, binary=False):
     # Determine the delimiter of the CSV file.
     with open(filename, 'r', encoding='utf-8') as f:
         sample = f.read(1024)
@@ -34,6 +34,7 @@ def load_connectivity_matrix(filename, threshold=0.0, binary=False):
 
     # Apply thresholding if specified.
     if threshold > 0.0:
+        threshold = np.percentile(matrix, threshold)
         matrix[matrix < threshold] = 0.0
 
     # Convert matrix to binary if the binary flag is set.
@@ -76,6 +77,7 @@ def assign_communities(G):
             comm_dict[node] = i
     return comm_dict, communities
 
+
 def compute_participation_coefficient(G, communities):
     """
     Compute the participation coefficient for each node.
@@ -99,6 +101,7 @@ def compute_participation_coefficient(G, communities):
         participation[node] = 1.0 - sum_sq
     return participation
 
+
 def compute_node_metrics(G, communities=None):
     # Compute degree (binary) and strength (weighted degree)
     degree_dict = dict(G.degree())
@@ -117,7 +120,7 @@ def compute_node_metrics(G, communities=None):
     local_eff = local_efficiency_node(G)
 
     # Compute communities and participation coefficient.
-    
+
     if communities is None:
         communities, communities_list = assign_communities(G)
     else:
@@ -145,10 +148,10 @@ def compute_global_metrics(G, communities):
     # Global efficiency
     global_eff = nx.global_efficiency(G)
     local_eff = nx.local_efficiency(G)
-    
+
     # Average clustering coefficient
     avg_clustering = nx.average_clustering(G, weight='weight')
-    
+
     # Average shortest path length: compute on the largest connected component if necessary.
     if nx.is_connected(G):
         avg_shortest_path = nx.average_shortest_path_length(G, weight='weight')
@@ -156,13 +159,13 @@ def compute_global_metrics(G, communities):
         largest_cc = max(nx.connected_components(G), key=len)
         subG = G.subgraph(largest_cc)
         avg_shortest_path = nx.average_shortest_path_length(subG, weight='weight')
-    
+
     # Network density
     density = nx.density(G)
-    
+
     # Modularity of the partition obtained by greedy modularity communities algorithm.
     modularity = nx.algorithms.community.quality.modularity(G, communities, weight='weight')
-    
+
     # Average degree and strength
     avg_degree = np.mean([d for _, d in dict(G.degree()).items()])
     avg_strength = np.mean([s for _, s in dict(G.degree(weight='weight')).items()])
@@ -185,26 +188,27 @@ def compute_global_metrics(G, communities):
     }
     return pd.DataFrame([metrics])
 
+
 def main():
     args = parse_args()
-    
+
     # Load the connectivity matrix.
     matrix = load_connectivity_matrix(args.connectivity, threshold=args.threshold, binary=args.binary)
-    
+
     # Create a weighted undirected graph from the connectivity matrix.
     # Assumes the matrix is symmetric.
     G = nx.from_numpy_array(matrix)
-        
+
     # Compute communities again for global modularity (we already computed them in compute_node_metrics).
     communities_dict, communities = assign_communities(G)
 
     # Compute node-level metrics.
     node_metrics = compute_node_metrics(G, communities_dict)
 
-    
+
     # Compute global network metrics.
     global_metrics = compute_global_metrics(G, communities)
-    
+
     # Save outputs to CSV files.
     node_metrics.to_csv(args.node_out)
     global_metrics.to_csv(args.global_out, index=False)
