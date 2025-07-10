@@ -5,6 +5,7 @@ This package provides a CLI-callable wrapper of networkX to compute graph theore
 """
 
 from importlib.metadata import version, PackageNotFoundError
+from brain_graph_metrics.brain_graph_metrics import *
 
 try:
     __version__ = version("brain_graph_metrics")
