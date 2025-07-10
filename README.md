@@ -17,7 +17,7 @@ brain-graph-metrics <matrix.csv> --threshold 95 --binary --node_out <output_node
 
 - **<matrix.csv>**: Input CSV file containing the connectivity matrix.\
 The file must have no header nor row names.
-- **--threshold <integer>**: Optional threshold; Value between 0 and 100. Percentile below whitch connections are removed. Default is 0.
+- **--threshold \<integer\>**: Optional threshold; Value between 0 and 100. Percentile below whitch connections are removed. Default is 0.
 - **--binary**: Converts the thresholded connectivity matrix to a binary (unweighted) graph.
 - **--node_out <output_node_metrics.csv>**: Output CSV file for node-wise metrics.
 - **--global_out <output_global_metrics.csv>**: Output CSV file for global network metrics.
