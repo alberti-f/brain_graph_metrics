@@ -122,7 +122,8 @@ def _check_matrix(matrix):
         raise ValueError(error_msg.format("not contain NaN values"))
     if (matrix < 0).any():
         raise ValueError(error_msg.format("not contain negative values"))
-
+    if np.sum(matrix != 0) == 0:
+        raise ValueError("There are no connections left in the matrix after thresholding and removal of negative values.\n")
 
 def global_efficiency_node(G):
     """
