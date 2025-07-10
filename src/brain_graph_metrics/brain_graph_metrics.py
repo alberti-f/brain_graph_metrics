@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument("--threshold", type=float, default=0.0,
                         help="Threshold below which connection weights are set to zero (default: 0.0, i.e. no thresholding).")
     parser.add_argument("--binary", action="store_true",
-                        help="Convert the connectivity matrix to a binary (unweighted) graph.")
+                        help="Convert the thresholded connectivity matrix to a binary (unweighted) graph.")
     parser.add_argument("--node_out", type=str, default="node_metrics.csv",
                         help="Output CSV file for node-wise metrics (default: node_metrics.csv).")
     parser.add_argument("--global_out", type=str, default="global_metrics.csv",
