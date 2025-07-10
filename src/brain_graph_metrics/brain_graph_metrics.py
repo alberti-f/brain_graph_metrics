@@ -32,6 +32,7 @@ def parse_args():
                         help="Do not compute small-world index.")
     return parser.parse_args()
 
+
 def load_connectivity_matrix(filename, threshold=0, binary=False):
     """
     Load a structural connectivity matrix from a CSV file, applying an optional threshold 
@@ -44,7 +45,15 @@ def load_connectivity_matrix(filename, threshold=0, binary=False):
 
     Returns:
         np.ndarray: Processed connectivity matrix as a NumPy array.
+
+    Notes:
+        - The CSV file must not have a header or row names.
+        - The matrix is assumed to be symmetric.
+        - If threshold is greater than 0, values below the specified percentile are set to zero.
+        - If binary is True, the matrix is converted to a binary representation (0 or 1).
+        - Residual negative values are set to zero.
     """
+
     # Determine the delimiter of the CSV file.
     with open(filename, 'r', encoding='utf-8') as f:
         sample = f.read(1024)
@@ -54,17 +63,65 @@ def load_connectivity_matrix(filename, threshold=0, binary=False):
 
     df = pd.read_csv(filename, index_col=None, header=None, delimiter=delimiter)
     matrix = df.values.astype(float)
+    np.nan_to_num(matrix, copy=False, nan=0.0)
 
     # Apply thresholding if specified.
     if threshold > 0.0:
         threshold = np.percentile(matrix, threshold)
         matrix[matrix < threshold] = 0.0
 
+    if np.sum(matrix < 0) > matrix.size * 0.01:
+        raise ValueError("More than 1% of edge weights are negative after thresholding.\n" +
+                         "Normally they would be set to zero, but if they are too many this" +
+                         " may affect the graph metrics.\n" +
+                         "Please check the connectivity matrix and the threshold value.")
+
     # Convert matrix to binary if the binary flag is set.
     if binary:
         matrix = (matrix > 0).astype(float)
 
+    # Remove residual negative values
+    matrix[matrix < 0] = 0.0
+
+    _check_matrix(matrix)
+
     return matrix
+
+
+def _check_arguments(args):
+    """
+    Check the command-line arguments for validity.
+    
+    Parameters:
+        args (argparse.Namespace): Parsed command-line arguments.
+    
+    Raises:
+        ValueError: If the threshold is not in the range [0, 100].
+    """
+    if not (0 <= args.threshold <= 100):
+        raise ValueError("Threshold must be between 0 and 100.")
+    if not isinstance(args.connectivity, str):
+        raise ValueError("Connectivity must be a string representing the file path.")
+    if not isinstance(args.node_out, str):
+        raise ValueError("Node output file must be a string representing the file path.")
+    if not isinstance(args.global_out, str):
+        raise ValueError("Global output file must be a string representing the file path.")
+    
+
+def _check_matrix(matrix):
+    """
+    Check the connectivity matrix for validity by ensuring it is square, symmetric, 
+    does not contain NaN values, and has no negative entries.
+    """
+    error_msg = "Invalid connectivity matrix: the matrix must {}"
+    if matrix.shape[0] != matrix.shape[1]:
+        raise ValueError(error_msg.format("be square (same number of rows and columns)"))
+    if not np.allclose(matrix, matrix.T, atol=1e-10):
+        raise ValueError(error_msg.format("be symmetric (i.e., A[i][j] == A[j][i] for all i, j)"))
+    if np.isnan(matrix).any():
+        raise ValueError(error_msg.format("not contain NaN values"))
+    if (matrix < 0).any():
+        raise ValueError(error_msg.format("not contain negative values"))
 
 
 def global_efficiency_node(G):
@@ -287,6 +344,7 @@ def main():
     constructs the graph, computes node-level and global metrics, and saves results to CSV files.
     """
     args = parse_args()
+    _check_arguments(args)
 
     # Load the connectivity matrix.
     matrix = load_connectivity_matrix(args.connectivity, threshold=args.threshold, binary=args.binary)
