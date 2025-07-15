@@ -125,6 +125,7 @@ def _check_matrix(matrix):
     if np.sum(matrix != 0) == 0:
         raise ValueError("There are no connections left in the matrix after thresholding and removal of negative values.\n")
 
+
 def global_efficiency_node(G):
     """
     Compute the global efficiency for each node in a graph. 
@@ -295,6 +296,13 @@ def compute_global_metrics(G, communities, no_swi=False):
     Returns:
         pd.DataFrame: A DataFrame containing computed global network metrics.
     """
+    # Check number of connected components (if fully connected, this should be 1).
+    n_components = len(list(nx.connected_components(G)))
+    if n_components > 1:
+        print(f"\nWarning: The graph is not fully connected. "
+              + "SWI will not be computed and some metrics may not be valid.\n")
+        no_swi = True  # Disable small world index computation if graph is not connected.
+
     # Global efficiency
     global_eff = nx.global_efficiency(G)
     local_eff = nx.local_efficiency(G)
@@ -324,6 +332,7 @@ def compute_global_metrics(G, communities, no_swi=False):
     small_world_index = np.nan if no_swi else nx.algorithms.smallworld.sigma(G, niter=100, nrand=10, seed=seed)
 
     metrics = {
+        "N_Components": n_components,
         "Global_Efficiency": global_eff,
         "Local_Efficiency": local_eff,
         "Average_Clustering": avg_clustering,
